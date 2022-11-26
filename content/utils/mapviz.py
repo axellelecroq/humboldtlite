@@ -1,20 +1,32 @@
 import pandas as pd
 import numpy
-import random
-import IPython
-from IPython.display import display, clear_output, Javascript
-from ipywidgets import HTML, Output, HBox, Layout
-from ipyleaflet import Map, Marker, Popup, CircleMarker
-import matplotlib.pyplot as plt
+from IPython.display import display
+from ipywidgets import HTML, Output, Layout
+from ipyleaflet import Map, CircleMarker
 import ipywidgets as widgets
-import gender_guesser.detector
 
 from .nestedlookup import *
-from .prepare_data import getJSON, avoidTupleInList, getYears, getHumboldtYears
-from .widgets import createDropdown, createButton, createCheckBox
+from .prepare_data import getJSON, avoidTupleInList, getYears
 
 data = getJSON('data/bern_withgeo.json')
 out = Output()
+
+
+def createDropdown(desc: str, data:list ):
+    """
+    Create a Dropdown menu 
+    :param desc: str
+    :param data: list
+    :return: Dropdown menu
+    :rtype: widget
+    """
+    w = widgets.Dropdown(
+    options=sorted(set(data)),
+    value=None,
+    description=desc,
+    disabled=False
+    )
+    return w
 
 
 def allOnAMap(data):
