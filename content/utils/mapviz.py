@@ -10,14 +10,14 @@ import ipywidgets as widgets
 import gender_guesser.detector
 
 from .nestedlookup import *
-from .search_dynamic import show_webpage,btn_new_search
 from .prepare_data import getJSON, avoidTupleInList, getYears, getHumboldtYears
 from .widgets import createDropdown, createButton, createCheckBox
 
-data = getJSON('data/records.json')
+data = getJSON('data/bern_withgeo.json')
 out = Output()
 
-def allonmap(data, by: str):
+
+def allOnAMap(data):
     cities = {}
     marker = None
     coordinates = []
@@ -29,18 +29,16 @@ def allonmap(data, by: str):
     
     for i in data:
             try :
-                if i[by]["address"] not in cities:
-                    city = i[by]["address"]
+                if i["pubplace"]["address"] not in cities:
+                    city = i["pubplace"]["address"]
                     cities[city] = {}
-                    cities[city]["message"] = "<b>"+ i["date"] + " </b> " + i["title"] + "<br><i>"+ i["contributor"] +"</i> <br> <a href=\""+ i["identifier"][1] + "\" target=\"_blank\">online</a> <hr>"
-                    cities[city]["coordinates"] = [i[by]["coordinates"][1], i[by]["coordinates"][0]]
-                    
-                elif i[by]["address"] in cities:
-                    city = i[by]["address"]
-                    cities[city]["message"] = cities[city]["message"] + "<b>"+ i["date"] + " </b> " + i["title"] + "<br><i>"+ i["contributor"]  + "</i><br> <a href=\""+ i["identifier"][1] + "\" target=\"_blank\">online</a> <hr>"
+                    cities[city]["message"] = "<b>"+ i["year"] + " </b> " + i["title"] + "<br><i>"+"</i><a href=\""+ i["link"] + "\" target=\"_blank\">online</a> <hr>"
+                    cities[city]["coordinates"] = [i['pubplace']['coordinates'][1], i['pubplace']['coordinates'][0]] 
+                elif i["pubplace"]["address"] in cities:
+                    city = i["pubplace"]["address"]
+                    cities[city]["message"] = cities[city]["message"] + "<b>"+ i["year"] + " </b> " + i["title"] + "<br><i>"+"</i><a href=\""+ i["link"] + "\" target=\"_blank\">online</a> <hr>"
             except : pass
-            
-    # Coordinates to create a dynamic map boundaries
+        # Coordinates to create a dynamic map boundaries
     try:
         for i in cities.keys():
             if type(cities[i]["coordinates"][0]) == float and type(cities[i]["coordinates"][1]) == float:
@@ -61,10 +59,10 @@ def allonmap(data, by: str):
             try :
                 # Create the message of the popup
                 message = HTML()
-                if cities[i]["message"].count("<hr>") <3 :
+                if cities[i]["message"].count("<hr>") <5 :
                     message.value = cities[i]["message"]
                 else : 
-                    message.value = str(cities[i]["message"].count("<hr>")) + " letters. There are too many results to show them all here."
+                    message.value = str(cities[i]["message"].count("<hr>")) + " publications. There are too many results to show them all here."
                 message.description = i.upper()
 
                 # Create the marker
@@ -82,351 +80,495 @@ def allonmap(data, by: str):
                 marker.popup = message
             except: pass
     display(m)
-    
+
 
 def map_by_date():
     
     def on_value_change(change):
+        print(change['new'])
         output_bydate.clear_output(wait=True)
-        display(Javascript('IPython.notebook.execute_cell()'))
+        #display(Javascript('IPython.notebook.execute_cell()'))
         results = []
+        
         with output_bydate:
             for i in data:
-
                 try:
-                    if i["date"]:
-                        if change['new'] in i["date"]:
+                    if i['year']:
+                        if change['new'] in i["year"]:
                             results.append(i)
                 except: pass
-            allonmap(results, 'coverage_location')
+            allOnAMap(results)
 
-    dropdown = createDropdown('', getHumboldtYears(getYears(avoidTupleInList(nested_lookup('date', data)))))
+    dropdown = createDropdown('', getYears(avoidTupleInList(nested_lookup('year', data))))
     output_bydate = widgets.Output()
     display(dropdown, output_bydate)
     dropdown.observe(on_value_change, names='value')
-    
-
-def byperson():
-    # Get the letters which have a recorded date
-    with_date= []
-    for i in data:
-        try:
-            if bool(i['date']) == True:
-                with_date.append(i)
-        except:pass
-        
-    # Get all people who received or sent a letter    
-    creators = avoidTupleInList(nested_lookup('creator', with_date))
-    subjects = avoidTupleInList(nested_lookup('subject', with_date))
-    people = []
-    
-    # Delete Humboldt from creators' and subjects' lists
-    for i in creators:
-        if '[' in i :
-            i = i.split(' [vermutlich]')[0]
-        if 'Humboldt' not in i:
-            people.append(i)
-    for i in subjects:
-        if 'Humboldt' not in i and i not in people:
-            people.append(i)
-
-    #Create dropdown Menu
-    dropdown = createDropdown('', people)
-    return dropdown 
 
 
-def map_by_person():
+def map_by_languages():
     
     def on_value_change(change):
+        print(change['new'])
         output_bydate.clear_output(wait=True)
-        display(Javascript('IPython.notebook.execute_cell()'))
         results = []
+        
         with output_bydate:
-            person = change['new']
             for i in data:
-                try : 
-                    if person in i["creator"] or person in i["subject"]:
-                        results.append(i)
+                try:
+                    if i['language'] and change['new'] in i["language"]:
+                            results.append(i)
                 except: pass
-            allonmap(results, 'coverage_location')
+            allOnAMap(results)
 
-    dropdown = byperson()
+    dropdown = createDropdown('', avoidTupleInList(nested_lookup('language', data)))
     output_bydate = widgets.Output()
     display(dropdown, output_bydate)
     dropdown.observe(on_value_change, names='value')
 
 
-def createhistogramm(data, person):
-    """
-    Create a histogramm of the exchange of letters
-    between AvH and a selected person during the time.
-    :param data: List of letters
-    :param person: Selected person 
-    """
-    title = 'Correspondence between AvH(1769-1859) und ' + person
-    x_coords = [coord[0] for coord in data]
-    fig= plt.figure(figsize=(7,2))
-    plt.hist(x_coords, bins=30)
-    fig.suptitle(title, fontsize=9)
-    plt.xlabel('Year', fontsize=9)
-    plt.ylabel('Number of letters', fontsize=12)
-    
-    return plt.show()
-    
+def map_slider():
 
-def byperson():
-    # Get the letters which have a recorded date
-    with_date= []
-    for i in data:
-        try:
-            if bool(i['date']) == True:
-                with_date.append(i)
-        except:pass
-        
-    # Get all people who received or sent a letter    
-    creators = avoidTupleInList(nested_lookup('creator', with_date))
-    subjects = avoidTupleInList(nested_lookup('subject', with_date))
-    people = []
+    slider = widgets.IntRangeSlider(
+        value=[1789, 1789],
+        min=min(nested_lookup('year', data)),
+        max=max(nested_lookup('year', data)),
+        step=1,
+        description='Years:',
+        disabled=False,
+        continuous_update=False,
+        orientation='horizontal',
+        readout=True,
+        readout_format='d')
     
-    # Delete Humboldt from creators' and subjects' lists
-    for i in creators:
-        if '[' in i :
-            i = i.split(' [vermutlich]')[0]
-        if 'Humboldt' not in i:
-            people.append(i)
-    for i in subjects:
-        if 'Humboldt' not in i and i not in people:
-            people.append(i)
+    outputslider = widgets.Output()
+    display(slider, outputslider)
 
-    #Create dropdown Menu
-    dropdown = createDropdown('', people)
-    return dropdown 
-
-
-def histogramm_by_person(all:bool):
-    
-    if all == True:
-        d = byperson()
-    else : d = by_women(women_partner())
-    
     def on_value_change(change):
-        output_bydate.clear_output(wait=True)
-        display(Javascript('IPython.notebook.execute_cell()'))
-        results = []
-        liste = []
-        with output_bydate:
-            person = change['new']
+        with outputslider:
+            outputslider.clear_output(wait=True)
+            results = []
+            
             for i in data:
-                try : 
-                    if person in i["creator"] or person in i["subject"]:
-                        results.append(i)
-                except: pass     
+                try:
+                    if i['year']:
+                        if str(change['new'][0]) <= i['year'] >= str(change['new'][0]) :
+                            results.append(i)
+                except: pass
+            allOnAMap(results)
             
-            for i in results:
-                try :
-                    if int(i['date'][:4]) <1859:
-                        liste.append((int(i['date'][:4]), int(1)))
-                except:pass
-            
-            
-            print('Number of letters: {0}'.format(len(results)))
-            print('Letters with date: {0}'.format(len(liste)))
-            print('Letters without date: {0}'.format(len(results)-len(liste)))      
-            
-            if len(liste) > 1:
-                HBox([createhistogramm(liste, person), allonmap(results, 'coverage_location')])
-            else:
-                allonmap(results, 'coverage_location')
-    dropdown = d
-    output_bydate = widgets.Output()
-    display(dropdown, output_bydate)
-    dropdown.observe(on_value_change, names='value')
+    slider.observe(on_value_change, names='value')
 
 
-def sorted_by_period(data:list):
-    by_period = {'1792-1796: Deutschland' : [], '1797-1804: Amerika': [] , '1805: Berlin': [], '1806-1828: Paris':[] ,'1829: Russland': [] ,'1830-1859: Berlin':[]}
+# def allonmap(data, by: str):
+#     cities = {}
+#     marker = None
+#     coordinates = []
+#     m= Map(
+#             zoom=1.5,
+#             layout=Layout(width='80%', height='500px'),
+#             close_popup_on_click=False
+#             )
     
-    for i in data:
-        try :
-            date = int(i['date'][:4])
-            if date > 1792 and date < 1796:
-                by_period['1792-1796: Deutschland'].append(i)
-            elif date > 1799 and date < 1804:
-                by_period['1797-1804: Amerika'].append(i)
-            elif date == 1805:
-                by_period['1805: Berlin'].append(i)
-            elif date > 1806 and date < 1828:
-                by_period['1806-1828: Paris'].append(i)
-            elif date == 1829:
-                by_period['1829: Russland'].append(i)
-            elif date > 1830 and date < 1859:
-                by_period['1830-1859: Berlin'].append(i)
-        except: pass
-
-    return by_period
-
-
-def mapByPeriod():
-    btn = widgets.ToggleButtons(
-                options= sorted_by_period(data),
-                description='',
-                disabled=False,
-                button_style='',
-                )
-
-    def onchange(change):
-        output.clear_output(wait=True)
-        display(Javascript('IPython.notebook.execute_cell()'))
-        with output:
-             display(allonmap(change['new'], 'coverage_location'))
+#     for i in data:
+#             try :
+#                 if i[by]["address"] not in cities:
+#                     city = i[by]["address"]
+#                     cities[city] = {}
+#                     cities[city]["message"] = "<b>"+ i["date"] + " </b> " + i["title"] + "<br><i>"+ i["contributor"] +"</i> <br> <a href=\""+ i["identifier"][1] + "\" target=\"_blank\">online</a> <hr>"
+#                     cities[city]["coordinates"] = [i[by]["coordinates"][1], i[by]["coordinates"][0]]
+                    
+#                 elif i[by]["address"] in cities:
+#                     city = i[by]["address"]
+#                     cities[city]["message"] = cities[city]["message"] + "<b>"+ i["date"] + " </b> " + i["title"] + "<br><i>"+ i["contributor"]  + "</i><br> <a href=\""+ i["identifier"][1] + "\" target=\"_blank\">online</a> <hr>"
+#             except : pass
+            
+#     # Coordinates to create a dynamic map boundaries
+#     try:
+#         for i in cities.keys():
+#             if type(cities[i]["coordinates"][0]) == float and type(cities[i]["coordinates"][1]) == float:
+#                 coordinates.append([float(cities[i]["coordinates"][0]), float(cities[i]["coordinates"][1])])
+#             elif type(cities[i]["coordinates"][0]) == str and type(cities[i]["coordinates"][1]) == str:
+#                 coordinates.append([float(cities[i]["coordinates"][0]), float(cities[i]["coordinates"][1])])
+    
+#         coordinates = numpy.array(coordinates)
+#         data_frame = pd.DataFrame(coordinates, columns=['Lat', 'Long'])
+#         sw = data_frame[['Lat', 'Long']].min().values.tolist()
+#         ne = data_frame[['Lat', 'Long']].max().values.tolist()
+#         m.fit_bounds([sw, ne])
+#     except: pass
 
 
-    output = widgets.Output()
-    display(btn, output)
-    btn.observe(onchange, 'value')
+#     # Mapmarker and popup message
+#     for i in cities.keys():
+#             try :
+#                 # Create the message of the popup
+#                 message = HTML()
+#                 if cities[i]["message"].count("<hr>") <3 :
+#                     message.value = cities[i]["message"]
+#                 else : 
+#                     message.value = str(cities[i]["message"].count("<hr>")) + " letters. There are too many results to show them all here."
+#                 message.description = i.upper()
+
+#                 # Create the marker
+#                 marker = CircleMarker(location=(cities[i]["coordinates"][0], cities[i]["coordinates"][1]))
+#                 radius = cities[i]["message"].count("<hr>")+3
+#                 if radius > 10:
+#                     radius = 12
+#                 marker.radius = radius
+#                 marker.fill_opacity = 0.8
+#                 marker.fill_color = '#3E81B8'
+#                 marker.stroke = False
+
+#                 # Add marker on the map
+#                 m.add_layer(marker)
+#                 marker.popup = message
+#             except: pass
+#     display(m)
     
 
-#### WOMEN ####
-def women_partner():
-    guess = gender_guesser.detector.Detector()
-    data_women = []
+# def map_by_date():
+    
+#     def on_value_change(change):
+#         output_bydate.clear_output(wait=True)
+#         display(Javascript('IPython.notebook.execute_cell()'))
+#         results = []
+#         with output_bydate:
+#             for i in data:
 
-    # Letters to AvH
-    for i in data:
-        try :
-            if 'Humboldt' not in i['creator'] and 'Unbekannt' not in i['creator'] and type(i['creator']) != list:
-                firstname = i['creator'].split(' ')[0]
-                gender =guess.get_gender(firstname)
-                if gender == 'unknown':
-                    firstname = i['creator'].split(', ')[1].split(' (')[0]
-                    gender =guess.get_gender(firstname)
+#                 try:
+#                     if i["date"]:
+#                         if change['new'] in i["date"]:
+#                             results.append(i)
+#                 except: pass
+#             allonmap(results, 'coverage_location')
+
+#     dropdown = createDropdown('', getHumboldtYears(getYears(avoidTupleInList(nested_lookup('date', data)))))
+#     output_bydate = widgets.Output()
+#     display(dropdown, output_bydate)
+#     dropdown.observe(on_value_change, names='value')
+    
+
+# def byperson():
+#     # Get the letters which have a recorded date
+#     with_date= []
+#     for i in data:
+#         try:
+#             if bool(i['date']) == True:
+#                 with_date.append(i)
+#         except:pass
+        
+#     # Get all people who received or sent a letter    
+#     creators = avoidTupleInList(nested_lookup('creator', with_date))
+#     subjects = avoidTupleInList(nested_lookup('subject', with_date))
+#     people = []
+    
+#     # Delete Humboldt from creators' and subjects' lists
+#     for i in creators:
+#         if '[' in i :
+#             i = i.split(' [vermutlich]')[0]
+#         if 'Humboldt' not in i:
+#             people.append(i)
+#     for i in subjects:
+#         if 'Humboldt' not in i and i not in people:
+#             people.append(i)
+
+#     #Create dropdown Menu
+#     dropdown = createDropdown('', people)
+#     return dropdown 
+
+
+# def map_by_person():
+    
+#     def on_value_change(change):
+#         output_bydate.clear_output(wait=True)
+#         display(Javascript('IPython.notebook.execute_cell()'))
+#         results = []
+#         with output_bydate:
+#             person = change['new']
+#             for i in data:
+#                 try : 
+#                     if person in i["creator"] or person in i["subject"]:
+#                         results.append(i)
+#                 except: pass
+#             allonmap(results, 'coverage_location')
+
+#     dropdown = byperson()
+#     output_bydate = widgets.Output()
+#     display(dropdown, output_bydate)
+#     dropdown.observe(on_value_change, names='value')
+
+
+# def createhistogramm(data, person):
+#     """
+#     Create a histogramm of the exchange of letters
+#     between AvH and a selected person during the time.
+#     :param data: List of letters
+#     :param person: Selected person 
+#     """
+#     title = 'Correspondence between AvH(1769-1859) und ' + person
+#     x_coords = [coord[0] for coord in data]
+#     fig= plt.figure(figsize=(7,2))
+#     plt.hist(x_coords, bins=30)
+#     fig.suptitle(title, fontsize=9)
+#     plt.xlabel('Year', fontsize=9)
+#     plt.ylabel('Number of letters', fontsize=12)
+    
+#     return plt.show()
+    
+
+# def byperson():
+#     # Get the letters which have a recorded date
+#     with_date= []
+#     for i in data:
+#         try:
+#             if bool(i['date']) == True:
+#                 with_date.append(i)
+#         except:pass
+        
+#     # Get all people who received or sent a letter    
+#     creators = avoidTupleInList(nested_lookup('creator', with_date))
+#     subjects = avoidTupleInList(nested_lookup('subject', with_date))
+#     people = []
+    
+#     # Delete Humboldt from creators' and subjects' lists
+#     for i in creators:
+#         if '[' in i :
+#             i = i.split(' [vermutlich]')[0]
+#         if 'Humboldt' not in i:
+#             people.append(i)
+#     for i in subjects:
+#         if 'Humboldt' not in i and i not in people:
+#             people.append(i)
+
+#     #Create dropdown Menu
+#     dropdown = createDropdown('', people)
+#     return dropdown 
+
+
+# def histogramm_by_person(all:bool):
+    
+#     if all == True:
+#         d = byperson()
+#     else : d = by_women(women_partner())
+    
+#     def on_value_change(change):
+#         output_bydate.clear_output(wait=True)
+#         display(Javascript('IPython.notebook.execute_cell()'))
+#         results = []
+#         liste = []
+#         with output_bydate:
+#             person = change['new']
+#             for i in data:
+#                 try : 
+#                     if person in i["creator"] or person in i["subject"]:
+#                         results.append(i)
+#                 except: pass     
+            
+#             for i in results:
+#                 try :
+#                     if int(i['date'][:4]) <1859:
+#                         liste.append((int(i['date'][:4]), int(1)))
+#                 except:pass
+            
+            
+#             print('Number of letters: {0}'.format(len(results)))
+#             print('Letters with date: {0}'.format(len(liste)))
+#             print('Letters without date: {0}'.format(len(results)-len(liste)))      
+            
+#             if len(liste) > 1:
+#                 HBox([createhistogramm(liste, person), allonmap(results, 'coverage_location')])
+#             else:
+#                 allonmap(results, 'coverage_location')
+#     dropdown = d
+#     output_bydate = widgets.Output()
+#     display(dropdown, output_bydate)
+#     dropdown.observe(on_value_change, names='value')
+
+
+# def sorted_by_period(data:list):
+#     by_period = {'1792-1796: Deutschland' : [], '1797-1804: Amerika': [] , '1805: Berlin': [], '1806-1828: Paris':[] ,'1829: Russland': [] ,'1830-1859: Berlin':[]}
+    
+#     for i in data:
+#         try :
+#             date = int(i['date'][:4])
+#             if date > 1792 and date < 1796:
+#                 by_period['1792-1796: Deutschland'].append(i)
+#             elif date > 1799 and date < 1804:
+#                 by_period['1797-1804: Amerika'].append(i)
+#             elif date == 1805:
+#                 by_period['1805: Berlin'].append(i)
+#             elif date > 1806 and date < 1828:
+#                 by_period['1806-1828: Paris'].append(i)
+#             elif date == 1829:
+#                 by_period['1829: Russland'].append(i)
+#             elif date > 1830 and date < 1859:
+#                 by_period['1830-1859: Berlin'].append(i)
+#         except: pass
+
+#     return by_period
+
+
+# def mapByPeriod():
+#     btn = widgets.ToggleButtons(
+#                 options= sorted_by_period(data),
+#                 description='',
+#                 disabled=False,
+#                 button_style='',
+#                 )
+
+#     def onchange(change):
+#         output.clear_output(wait=True)
+#         display(Javascript('IPython.notebook.execute_cell()'))
+#         with output:
+#              display(allonmap(change['new'], 'coverage_location'))
+
+
+#     output = widgets.Output()
+#     display(btn, output)
+#     btn.observe(onchange, 'value')
+    
+
+# #### WOMEN ####
+# def women_partner():
+#     guess = gender_guesser.detector.Detector()
+#     data_women = []
+
+#     # Letters to AvH
+#     for i in data:
+#         try :
+#             if 'Humboldt' not in i['creator'] and 'Unbekannt' not in i['creator'] and type(i['creator']) != list:
+#                 firstname = i['creator'].split(' ')[0]
+#                 gender =guess.get_gender(firstname)
+#                 if gender == 'unknown':
+#                     firstname = i['creator'].split(', ')[1].split(' (')[0]
+#                     gender =guess.get_gender(firstname)
                 
-                    if ' ' in firstname :
-                        firstname = firstname.split(' ')[0]
-                    elif '-' in firstname :
-                        firstname = firstname.split('-')[0]
+#                     if ' ' in firstname :
+#                         firstname = firstname.split(' ')[0]
+#                     elif '-' in firstname :
+#                         firstname = firstname.split('-')[0]
 
-                if firstname == 'Henriette':
-                    gender = 'female'
-                else : 
-                    gender = guess.get_gender(firstname)
+#                 if firstname == 'Henriette':
+#                     gender = 'female'
+#                 else : 
+#                     gender = guess.get_gender(firstname)
                     
-            if 'female' in gender:
-                data_women.append(i)
-        except: pass
+#             if 'female' in gender:
+#                 data_women.append(i)
+#         except: pass
 
-    # Letters by AvH
-    for i in data:
-        try :
-            if 'Humboldt' not in i['subject'] and 'Unbekannt' not in i['subject'] and type(i['subject']) != list:
-                firstname = i['subject'].split(' ')[0]
-                gender = guess.get_gender(firstname)
-                if gender == 'unknown':
-                    firstname = i['subject'].split(', ')[1].split(' (')[0]
-                    gender =guess.get_gender(firstname)
-                    if ' ' in firstname :
-                        firstname = firstname.split(' ')[0]
-                    elif '-' in firstname :
-                        firstname = firstname.split('-')[0]
+#     # Letters by AvH
+#     for i in data:
+#         try :
+#             if 'Humboldt' not in i['subject'] and 'Unbekannt' not in i['subject'] and type(i['subject']) != list:
+#                 firstname = i['subject'].split(' ')[0]
+#                 gender = guess.get_gender(firstname)
+#                 if gender == 'unknown':
+#                     firstname = i['subject'].split(', ')[1].split(' (')[0]
+#                     gender =guess.get_gender(firstname)
+#                     if ' ' in firstname :
+#                         firstname = firstname.split(' ')[0]
+#                     elif '-' in firstname :
+#                         firstname = firstname.split('-')[0]
 
-                    if firstname == 'Henriette':
-                        gender = 'female'
-                    else : 
-                        gender =guess.get_gender(firstname)
+#                     if firstname == 'Henriette':
+#                         gender = 'female'
+#                     else : 
+#                         gender =guess.get_gender(firstname)
                     
-            if 'female' in gender:
-                data_women.append(i)
-        except: pass
+#             if 'female' in gender:
+#                 data_women.append(i)
+#         except: pass
 
-    return data_women
+#     return data_women
        
-def by_women(data:dict):
-    """
-    Function that creates a dropdown menu of all persons 
-    who have received and/or sent at least one letter 
-    for which a date is recorded
-    :param data: dict
-    :return: dropdown menu
-    :rtype: widget
-    """
+# def by_women(data:dict):
+#     """
+#     Function that creates a dropdown menu of all persons 
+#     who have received and/or sent at least one letter 
+#     for which a date is recorded
+#     :param data: dict
+#     :return: dropdown menu
+#     :rtype: widget
+#     """
  
-    # Get all people who received or sent a letter    
-    creators = avoidTupleInList(nested_lookup('creator', data))
-    subjects = avoidTupleInList(nested_lookup('subject', data))
-    people = []
+#     # Get all people who received or sent a letter    
+#     creators = avoidTupleInList(nested_lookup('creator', data))
+#     subjects = avoidTupleInList(nested_lookup('subject', data))
+#     people = []
     
-    # Delete Humboldt from creators' and subjects' lists
-    for i in creators:
-        if '[' in i :
-            i = i.split(' [vermutlich]')[0]
-        if 'Humboldt' not in i:
-            people.append(i)
-    for i in subjects:
-        if 'Humboldt' not in i and i not in people:
-            people.append(i)
+#     # Delete Humboldt from creators' and subjects' lists
+#     for i in creators:
+#         if '[' in i :
+#             i = i.split(' [vermutlich]')[0]
+#         if 'Humboldt' not in i:
+#             people.append(i)
+#     for i in subjects:
+#         if 'Humboldt' not in i and i not in people:
+#             people.append(i)
 
-    #Create dropdown Menu
-    dropdown = createDropdown('', people)
-    return dropdown
+#     #Create dropdown Menu
+#     dropdown = createDropdown('', people)
+#     return dropdown
     
-#####
+# #####
 
-def age_distribution() :
-    years_an = {}
-    years_von = {}
-    liste_an=[]
-    liste_von=[]
+# def age_distribution() :
+#     years_an = {}
+#     years_von = {}
+#     liste_an=[]
+#     liste_von=[]
     
-    # Letter to Humboldt
-    for i in data :
-        try :
-            if i["date"] and "Humboldt" not in i["creator"] and type(i["creator"]) != list :
-                if i["date"][:4] not in years_an:
-                    years_an[i["date"][:4]] = []
-                years_an[i["date"][:4]].append(int(i["date"][:4]) - int(i["creator"].split("(")[1].split("-")[0][:4]))
-        except: pass 
+#     # Letter to Humboldt
+#     for i in data :
+#         try :
+#             if i["date"] and "Humboldt" not in i["creator"] and type(i["creator"]) != list :
+#                 if i["date"][:4] not in years_an:
+#                     years_an[i["date"][:4]] = []
+#                 years_an[i["date"][:4]].append(int(i["date"][:4]) - int(i["creator"].split("(")[1].split("-")[0][:4]))
+#         except: pass 
 
-    # Letter by Humboldt     
-    for i in data :
-        try :
-            if i["date"] and "Humboldt" not in i["subject"] and type(i["subject"]) != list :
-                if i["date"][:4] not in years_von:
-                    years_von[i["date"][:4]] = []
-                years_von[i["date"][:4]].append(int(i["date"][:4]) - int(i["subject"].split("(")[1].split("-")[0][:4]))
-        except: pass 
+#     # Letter by Humboldt     
+#     for i in data :
+#         try :
+#             if i["date"] and "Humboldt" not in i["subject"] and type(i["subject"]) != list :
+#                 if i["date"][:4] not in years_von:
+#                     years_von[i["date"][:4]] = []
+#                 years_von[i["date"][:4]].append(int(i["date"][:4]) - int(i["subject"].split("(")[1].split("-")[0][:4]))
+#         except: pass 
 
-    for element in years_an.keys():
-        try :
-            if (float(element)<1859):
-                for element1 in years_an[element]: 
-                    if (float(element1)>0):
-                        liste_an.append((float(element), float(element1)))
-        except : pass
+#     for element in years_an.keys():
+#         try :
+#             if (float(element)<1859):
+#                 for element1 in years_an[element]: 
+#                     if (float(element1)>0):
+#                         liste_an.append((float(element), float(element1)))
+#         except : pass
                 
-    for element in years_von.keys():
-        try :
-            if (float(element)<1859):
-                for element1 in years_von[element]: 
-                    if (float(element1)>0):
-                        liste_von.append((float(element), float(element1)))
-        except : pass
+#     for element in years_von.keys():
+#         try :
+#             if (float(element)<1859):
+#                 for element1 in years_von[element]: 
+#                     if (float(element1)>0):
+#                         liste_von.append((float(element), float(element1)))
+#         except : pass
 
-    x_coords = [coord[0] for coord in liste_an]
-    y_coords = [coord[1] for coord in liste_an]
-    fig= plt.figure(figsize=(10,8))
-    plt.hist2d(x_coords, y_coords, bins=(40, 40), cmap=plt.cm.Reds)
-    fig.suptitle('Letters to AvH: age distribution of senders', fontsize=14)
-    plt.xlabel('Year', fontsize=12)
-    plt.ylabel('Age of the correspondence partner', fontsize=12)
-    plt.colorbar()
-    an_plt = plt.show()
+#     x_coords = [coord[0] for coord in liste_an]
+#     y_coords = [coord[1] for coord in liste_an]
+#     fig= plt.figure(figsize=(10,8))
+#     plt.hist2d(x_coords, y_coords, bins=(40, 40), cmap=plt.cm.Reds)
+#     fig.suptitle('Letters to AvH: age distribution of senders', fontsize=14)
+#     plt.xlabel('Year', fontsize=12)
+#     plt.ylabel('Age of the correspondence partner', fontsize=12)
+#     plt.colorbar()
+#     an_plt = plt.show()
 
-    von_x_coords = [coord[0] for coord in liste_von]
-    von_y_coords = [coord[1] for coord in liste_von]
-    fig= plt.figure(figsize=(10,8))
-    plt.hist2d(von_x_coords, von_y_coords, bins=(40, 40), cmap=plt.cm.Reds)
-    fig.suptitle('Letters by AvH: age distribution of addressees', fontsize=14)
-    plt.xlabel('Year', fontsize=12)
-    plt.ylabel('Age of the correspondence partner', fontsize=12)
-    plt.colorbar()
-    von_plt = plt.show()
+#     von_x_coords = [coord[0] for coord in liste_von]
+#     von_y_coords = [coord[1] for coord in liste_von]
+#     fig= plt.figure(figsize=(10,8))
+#     plt.hist2d(von_x_coords, von_y_coords, bins=(40, 40), cmap=plt.cm.Reds)
+#     fig.suptitle('Letters by AvH: age distribution of addressees', fontsize=14)
+#     plt.xlabel('Year', fontsize=12)
+#     plt.ylabel('Age of the correspondence partner', fontsize=12)
+#     plt.colorbar()
+#     von_plt = plt.show()
