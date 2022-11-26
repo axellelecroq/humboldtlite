@@ -141,7 +141,7 @@ def map_by_languages():
 def map_slider():
 
     slider = widgets.IntRangeSlider(
-        value=[1789, 1789],
+        value=[1823, 1824],
         min=min(nested_lookup('year', data)),
         max=max(nested_lookup('year', data)),
         step=1,
@@ -159,11 +159,10 @@ def map_slider():
         with outputslider:
             outputslider.clear_output(wait=True)
             results = []
-            
             for i in data:
                 try:
                     if i['year']:
-                        if str(change['new'][0]) <= i['year'] >= str(change['new'][0]) :
+                        if str(change['new'][0]) <= i['year'] <= str(change['new'][1]) :
                             results.append(i)
                 except: pass
             allOnAMap(results)
